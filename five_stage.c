@@ -16,12 +16,16 @@ int main(int argc, char **argv)
 {
   struct instruction *tr_entry;
   struct instruction IF, ID, EX, MEM, WB;
+  // Create a no-op instruction to be inserted when necessary
+  struct instruction nop = {ti_NOP, 0, 0, 0, 0, 0};
+  struct instruction* nopPointer = &nop;
   size_t size;
   char *trace_file_name;
   int trace_view_on = 0;
   int flush_counter = 4; //5 stage pipeline, so we have to move 4 instructions once trace is done
   
   unsigned int cycle_number = 0;
+  unsigned int numNop = 0;
 
   if (argc == 1) {
     fprintf(stdout, "\nUSAGE: tv <trace_file> <switch - any character>\n");
@@ -44,7 +48,11 @@ int main(int argc, char **argv)
   trace_init();
 
   while(1) {
-    size = trace_get_item(&tr_entry); /* put the instruction into a buffer */
+    // Only load a new instruction from the trace if we haven't inserted a no-op
+    if (numNop == 0) 
+      size = trace_get_item(&tr_entry); /* put the instruction into a buffer */
+    else
+      numNop--;
    
     if (!size && flush_counter==0) {       /* no more instructions (instructions) to simulate */
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
@@ -63,8 +71,19 @@ int main(int argc, char **argv)
         flush_counter--;   
       }
       else{   /* copy trace entry into IF stage */
-        memcpy(&IF, tr_entry , sizeof(IF));
-      }
+        // Check for a data hazard
+        if (ID.type == ti_LOAD) {
+          uint8_t loadIntoReg = ID.sReg_b;
+          if (tr_entry->sReg_a == loadIntoReg || tr_entry->sReg_b == loadIntoReg) {
+            // Insert a no-op into the pipeline
+            memcpy(&IF, nopPointer, sizeof(IF));
+            numNop = 1;
+          }
+        }
+        // Only copy in the next instruction if we didn't just insert a no-op
+        if (numNop == 0)
+          memcpy(&IF, tr_entry, sizeof(IF));
+        }
 
       //printf("==============================================================================\n");
     }  
