@@ -22,6 +22,7 @@ int main(int argc, char **argv)
   size_t size;
   char *trace_file_name;
   int trace_view_on = 0;
+  int prediction_method = 0;
   int flush_counter = 4; //5 stage pipeline, so we have to move 4 instructions once trace is done
   
   unsigned int cycle_number = 0;
@@ -34,7 +35,8 @@ int main(int argc, char **argv)
   }
     
   trace_file_name = argv[1];
-  if (argc == 3) trace_view_on = atoi(argv[2]) ;
+  if (argc >= 3) prediction_method = atoi(argv[2]) ;
+  if (argc == 4) trace_view_on = atoi(argv[3]) ;
 
   fprintf(stdout, "\n ** opening file %s\n", trace_file_name);
 
