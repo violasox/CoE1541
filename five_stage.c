@@ -2,7 +2,7 @@
 /* CS/COE 1541				 			
    compile with gcc -o pipeline five_stage.c			
    and execute using							
-   ./pipeline  /afs/cs.pitt.edu/courses/1541/short_traces/sample.tr	0  
+   ./pipeline  /afs/cs.pitt.edu/courses/1541/short_traces/sample.tr	0 1
 ***************************************************************/
 
 #include <stdio.h>
@@ -30,6 +30,7 @@ int main(int argc, char **argv)
   
   unsigned int cycle_number = 0;
   unsigned int numNop = 0;
+  int prefetch_ready = 0;
 
   if (argc == 1) {
     fprintf(stdout, "\nUSAGE: tv <trace_file> <switch - any character>\n");
@@ -54,7 +55,7 @@ int main(int argc, char **argv)
 
   // initial instruction fetch for prefetch queue
   trace_get_item(&tr_entry); /* put the instruction into a buffer */
-
+  
   while(1) {
 
     // Only load a new instruction from the trace if we haven't inserted a no-op
@@ -95,6 +96,8 @@ int main(int argc, char **argv)
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
       break;
     }
+    else if (!prefetch_ready)
+    	prefetch_ready = 1;
     else {            /* move the pipeline forward */
       cycle_number++;
 
