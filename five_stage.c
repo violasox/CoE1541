@@ -24,6 +24,9 @@ int main(int argc, char **argv)
   int trace_view_on = 0;
   int prediction_method = 0;
   int flush_counter = 4; //5 stage pipeline, so we have to move 4 instructions once trace is done
+
+  // array of 2 instructions
+  struct instruction *prefetch[2];
   
   unsigned int cycle_number = 0;
   unsigned int numNop = 0;
@@ -49,18 +52,50 @@ int main(int argc, char **argv)
 
   trace_init();
 
+  // initial instruction fetch for prefetch queue
+  trace_get_item(&tr_entry); /* put the instruction into a buffer */
+
   while(1) {
+
     // Only load a new instruction from the trace if we haven't inserted a no-op
-    if (numNop == 0) 
+    if (numNop == 0)
+    {
+    	prefetch[0] = tr_entry;
       size = trace_get_item(&tr_entry); /* put the instruction into a buffer */
+    }
     else
+    {
+    	prefetch[0] = nopPointer;
       numNop--;
+    }
+
+    // Check for a data hazard
+    if (prefetch[0]->type == ti_LOAD) {
+      uint8_t loadIntoReg = prefetch[0]->dReg;
+      switch (tr_entry->type)
+      {
+      	case ti_RTYPE :
+      	case ti_STORE :
+      	case ti_BRANCH :
+		      if (tr_entry->sReg_a == loadIntoReg || tr_entry->sReg_b == loadIntoReg) {
+		        	numNop = 1;
+		      }
+		      break;
+		    case ti_ITYPE :
+		    case ti_LOAD :
+		    case ti_JRTYPE :
+		    	if (tr_entry->sReg_a == loadIntoReg) {
+		        	numNop = 1;
+		      }
+		      break;
+	    }
+    }
    
     if (!size && flush_counter==0) {       /* no more instructions (instructions) to simulate */
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
       break;
     }
-    else{              /* move the pipeline forward */
+    else {            /* move the pipeline forward */
       cycle_number++;
 
       /* move instructions one stage ahead */
@@ -69,27 +104,18 @@ int main(int argc, char **argv)
       EX = ID;
       ID = IF;
 
-      if(!size){    /* if no more instructions in trace, reduce flush_counter */
+      if(!size) {    /* if no more instructions in trace, reduce flush_counter */
         flush_counter--;   
       }
-      else{   /* copy trace entry into IF stage */
-        // Check for a data hazard
-        if (ID.type == ti_LOAD) {
-          uint8_t loadIntoReg = ID.sReg_b;
-          if (tr_entry->sReg_a == loadIntoReg || tr_entry->sReg_b == loadIntoReg) {
-            // Insert a no-op into the pipeline
-            memcpy(&IF, nopPointer, sizeof(IF));
-            numNop = 1;
-          }
-        }
-        // Only copy in the next instruction if we didn't just insert a no-op
-        if (numNop == 0)
-          memcpy(&IF, tr_entry, sizeof(IF));
-        }
-
+      else {   /* copy the later queue entry into IF stage */
+      	memcpy(&IF, prefetch[1], sizeof(IF));
+      
       //printf("==============================================================================\n");
-    }  
+    	}  
+    }
 
+    // always shift the queue by 1
+   	prefetch[1] = prefetch[0];
 
     if (trace_view_on && cycle_number>=5) {/* print the executed instruction if trace_view_on=1 */
       switch(WB.type) {
