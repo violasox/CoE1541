@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <string.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include "CPU.h" 
 
@@ -103,7 +105,7 @@ int main(int argc, char **argv)
       EX2 = ID2;
       ID2 = IF2;
 
-      if(!size){    /* if no more instructions in trace, reduce flush_counter */
+      if(!size) {    /* if no more instructions in trace, reduce flush_counter */
         flush_counter--;   
       }
       else {
@@ -116,41 +118,8 @@ int main(int argc, char **argv)
 
 
     if (trace_view_on && cycle_number>=5) {/* print the executed instruction if trace_view_on=1 */
-      switch(WB.type) {
-        case ti_NOP:
-          printf("[cycle %d] NOP:\n",cycle_number) ;
-          break;
-        case ti_RTYPE: /* registers are translated for printing by subtracting offset  */
-          printf("[cycle %d] RTYPE:",cycle_number) ;
-          printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(dReg: %d) \n", WB.PC, WB.sReg_a, WB.sReg_b, WB.dReg);
-          break;
-        case ti_ITYPE:
-          printf("[cycle %d] ITYPE:",cycle_number) ;
-          printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
-          break;
-        case ti_LOAD:
-          printf("[cycle %d] LOAD:",cycle_number) ;      
-          printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
-          break;
-        case ti_STORE:
-          printf("[cycle %d] STORE:",cycle_number) ;      
-          printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
-          break;
-        case ti_BRANCH:
-          printf("[cycle %d] BRANCH:",cycle_number) ;
-          printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
-          break;
-        case ti_JTYPE:
-          printf("[cycle %d] JTYPE:",cycle_number) ;
-          printf(" (PC: %d)(addr: %d)\n", WB.PC,WB.Addr);
-          break;
-        case ti_SPECIAL:
-          printf("[cycle %d] SPECIAL:\n",cycle_number) ;      	
-          break;
-        case ti_JRTYPE:
-          printf("[cycle %d] JRTYPE:",cycle_number) ;
-          printf(" (PC: %d) (sReg_a: %d)(addr: %d)\n", WB.PC, WB.dReg, WB.Addr);
-          break;
+      printInstruction(WB1, cycle_number);
+      printInstruction(WB2, cycle_number);
       }
     }
   }
@@ -160,15 +129,56 @@ int main(int argc, char **argv)
   exit(0);
 }
 
-int checkInstructionType(opcode_type type) {
+void printInstruction(struct instruction WB, unsigned int cycle_number) {
+  switch(WB.type) {
+    case ti_NOP:
+      printf("[cycle %d] NOP:\n",cycle_number) ;
+      break;
+    case ti_RTYPE: /* registers are translated for printing by subtracting offset  */
+      printf("[cycle %d] RTYPE:",cycle_number) ;
+      printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(dReg: %d) \n", WB.PC, WB.sReg_a, WB.sReg_b, WB.dReg);
+      break;
+    case ti_ITYPE:
+      printf("[cycle %d] ITYPE:",cycle_number) ;
+      printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
+      break;
+    case ti_LOAD:
+      printf("[cycle %d] LOAD:",cycle_number) ;      
+      printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
+      break;
+    case ti_STORE:
+      printf("[cycle %d] STORE:",cycle_number) ;      
+      printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
+      break;
+    case ti_BRANCH:
+      printf("[cycle %d] BRANCH:",cycle_number) ;
+      printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
+      break;
+    case ti_JTYPE:
+      printf("[cycle %d] JTYPE:",cycle_number) ;
+      printf(" (PC: %d)(addr: %d)\n", WB.PC,WB.Addr);
+      break;
+    case ti_SPECIAL:
+      printf("[cycle %d] SPECIAL:\n",cycle_number) ;      	
+      break;
+    case ti_JRTYPE:
+      printf("[cycle %d] JRTYPE:",cycle_number) ;
+      printf(" (PC: %d) (sReg_a: %d)(addr: %d)\n", WB.PC, WB.dReg, WB.Addr);
+      break;
+  }
+}
+
+int checkInstructionType(enum opcode type) {
   switch(type) {
     case ti_LOAD:
       return 2;
+      break;
     case ti_STORE:
       return 2;
-   
-   case default:
+      break;
+    default:
       return 1; 
+      break;
   }
 
   return 1;
