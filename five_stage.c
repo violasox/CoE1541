@@ -74,12 +74,14 @@ int main(int argc, char **argv)
     // Check for a data hazard
     if (prefetch[0]->type == ti_LOAD) 
     {
+      // get the register that the data will be loaded into
       uint8_t loadIntoReg = prefetch[0]->dReg;
       switch (tr_entry->type)
       {
       	case ti_RTYPE :
       	case ti_STORE :
       	case ti_BRANCH :
+        // if the next instruction is RTYPE/STORE/BRANCH check sReg a and b for load use
 		      if (tr_entry->sReg_a == loadIntoReg || tr_entry->sReg_b == loadIntoReg) {
 		        	numNop = 1;
 		      }
@@ -87,6 +89,7 @@ int main(int argc, char **argv)
 		    case ti_ITYPE :
 		    case ti_LOAD :
 		    case ti_JRTYPE :
+        // if the next instruction is ITYPE/LOAD/JRTYPE check ONLY sReg a for load use
 		    	if (tr_entry->sReg_a == loadIntoReg) {
 		        	numNop = 1;
 		      }
