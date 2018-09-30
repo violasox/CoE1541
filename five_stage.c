@@ -96,6 +96,7 @@ int main(int argc, char **argv)
     // check for control hazard
     else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE || prefetch[0]->type == ti_JRTYPE)
     {
+      // if prediction_method == 0, add a no op if the brach was taken
       if (prediction_method == 0 && tr_entry->PC == prefetch[0]->Addr)
         numNop = 1;
       else if (prediction_method == 1)
@@ -103,30 +104,26 @@ int main(int argc, char **argv)
         int taken = 0;
         int prediction = 0;
 
+        // determine if branch was taken
         if (tr_entry->PC == prefetch[0]->Addr)
-        {
           taken = 1;
-        }
 
-        printf("taken = %d\n", taken);
-
+        // determine hash key for target address
         int hashKey = prefetch[0]->Addr & 1008;
         hashKey = hashKey / 16;
 
+        // check if target address is in hash table
         item = search(hashKey);
+
+        // if target in hash table, prediction = value in table, else = not taken
         if (item != NULL)
-        {
           prediction = item->data;
-        }
 
-        printf("prediction = %d\n", prediction);
-
+        // if prediction isn't what actually happened, add a no op
         if (prediction != taken)
-        {
-          printf("prediction != taken\n");
           numNop = 1;
-        }
 
+        // add latest decision (taken/not) to hash table
         insert(hashKey, taken);
       }
     }
