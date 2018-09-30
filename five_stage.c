@@ -1,6 +1,6 @@
 /**************************************************************/
 /* CS/COE 1541				 			
-   compile with gcc -o pipeline five_stage.c			
+   compile with gcc -o pipeline five_stage.c
    and execute using							
    ./pipeline  /afs/cs.pitt.edu/courses/1541/short_traces/sample.tr	0 1
 ***************************************************************/
@@ -71,7 +71,8 @@ int main(int argc, char **argv)
     }
 
     // Check for a data hazard
-    if (prefetch[0]->type == ti_LOAD) {
+    if (prefetch[0]->type == ti_LOAD) 
+    {
       uint8_t loadIntoReg = prefetch[0]->dReg;
       switch (tr_entry->type)
       {
@@ -90,6 +91,14 @@ int main(int argc, char **argv)
 		      }
 		      break;
 	    }
+    }
+    // check for control hazard
+    else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE)
+    {
+      if (prediction_method == 0 && tr_entry->PC == prefetch[0]->Addr)
+      {
+        numNop = 1;
+      }
     }
    
     if (!size && flush_counter==0) {       /* no more instructions (instructions) to simulate */
