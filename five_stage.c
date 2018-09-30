@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <arpa/inet.h>
 #include "CPU.h" 
+#include "hash_table.h"
 
 int main(int argc, char **argv)
 {
@@ -96,8 +97,37 @@ int main(int argc, char **argv)
     else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE || prefetch[0]->type == ti_JRTYPE)
     {
       if (prediction_method == 0 && tr_entry->PC == prefetch[0]->Addr)
-      {
         numNop = 1;
+      else if (prediction_method == 1)
+      {
+        int taken = 0;
+        int prediction = 0;
+
+        if (tr_entry->PC == prefetch[0]->Addr)
+        {
+          taken = 1;
+        }
+
+        printf("taken = %d\n", taken);
+
+        int hashKey = prefetch[0]->Addr & 1008;
+        hashKey = hashKey / 16;
+
+        item = search(hashKey);
+        if (item != NULL)
+        {
+          prediction = item->data;
+        }
+
+        printf("prediction = %d\n", prediction);
+
+        if (prediction != taken)
+        {
+          printf("prediction != taken\n");
+          numNop = 1;
+        }
+
+        insert(hashKey, taken);
       }
     }
    

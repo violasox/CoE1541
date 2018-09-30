@@ -13,15 +13,91 @@ struct DataItem* hashArray[SIZE];
 struct DataItem* dummyItem;
 struct DataItem* item;
 
-int hashCode(int key);
+int hashCode(int key)
+{
+  return key % SIZE;
+}
 
-struct DataItem *search(int key);
+struct DataItem *search(int key)
+{
+  //get the hash
+  int hashIndex = hashCode(key);
 
-void insert(int key,int data);
+  //move in array until an empty
+  while(hashArray[hashIndex] != NULL)
+  {
 
-struct DataItem* delete(struct DataItem* item);
+      if(hashArray[hashIndex]->key == key)
+         return hashArray[hashIndex];
 
-void display(void);
+      //go to next cell
+      ++hashIndex;
+
+      //wrap around the table
+      hashIndex %= SIZE;
+   }
+
+   return NULL;
+}
+
+void insert(int key,int data)
+{
+
+   struct DataItem *item = (struct DataItem*) malloc(sizeof(struct DataItem));
+   item->data = data;
+   item->key = key;
+
+   //get the hash
+   int hashIndex = hashCode(key);
+
+   hashArray[hashIndex] = item;
+}
+
+struct DataItem* delete(struct DataItem* item)
+{
+   int key = item->key;
+
+   //get the hash
+   int hashIndex = hashCode(key);
+
+   //move in array until an empty
+   while(hashArray[hashIndex] != NULL)
+   {
+
+      if(hashArray[hashIndex]->key == key)
+      {
+         struct DataItem* temp = hashArray[hashIndex];
+
+         //assign a dummy item at deleted position
+         hashArray[hashIndex] = dummyItem;
+         return temp;
+      }
+
+      //go to next cell
+      ++hashIndex;
+
+      //wrap around the table
+      hashIndex %= SIZE;
+   }
+
+   return NULL;
+}
+
+void display(void)
+{
+   int i = 0;
+
+   for(i = 0; i<SIZE; i++)
+   {
+
+      if(hashArray[i] != NULL)
+         printf(" (%d,%d)",hashArray[i]->key,hashArray[i]->data);
+      else
+         printf(" ~~ ");
+   }
+
+   printf("\n");
+}
 
 #endif
 
