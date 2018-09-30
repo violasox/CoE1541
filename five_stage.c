@@ -71,63 +71,67 @@ int main(int argc, char **argv)
       numNop--;
     }
 
-    // Check for a data hazard
-    if (prefetch[0]->type == ti_LOAD) 
+    // there can only be hazards if there are instructions left
+    if (size)
     {
-      // get the register that the data will be loaded into
-      uint8_t loadIntoReg = prefetch[0]->dReg;
-      switch (tr_entry->type)
+      // Check for a data hazard
+      if (prefetch[0]->type == ti_LOAD) 
       {
-      	case ti_RTYPE :
-      	case ti_STORE :
-      	case ti_BRANCH :
-        // if the next instruction is RTYPE/STORE/BRANCH check sReg a and b for load use
-		      if (tr_entry->sReg_a == loadIntoReg || tr_entry->sReg_b == loadIntoReg) {
-		        	numNop = 1;
-		      }
-		      break;
-		    case ti_ITYPE :
-		    case ti_LOAD :
-		    case ti_JRTYPE :
-        // if the next instruction is ITYPE/LOAD/JRTYPE check ONLY sReg a for load use
-		    	if (tr_entry->sReg_a == loadIntoReg) {
-		        	numNop = 1;
-		      }
-		      break;
-	    }
-    }
-    // check for control hazard
-    else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE || prefetch[0]->type == ti_JRTYPE)
-    {
-      // if prediction_method == 0, add a no op if the brach was taken
-      if (prediction_method == 0 && tr_entry->PC == prefetch[0]->Addr)
-        numNop = 1;
-      else if (prediction_method == 1)
+        // get the register that the data will be loaded into
+        uint8_t loadIntoReg = prefetch[0]->dReg;
+        switch (tr_entry->type)
+        {
+        	case ti_RTYPE :
+        	case ti_STORE :
+        	case ti_BRANCH :
+          // if the next instruction is RTYPE/STORE/BRANCH check sReg a and b for load use
+  		      if (tr_entry->sReg_a == loadIntoReg || tr_entry->sReg_b == loadIntoReg) {
+  		        	numNop = 1;
+  		      }
+  		      break;
+  		    case ti_ITYPE :
+  		    case ti_LOAD :
+  		    case ti_JRTYPE :
+          // if the next instruction is ITYPE/LOAD/JRTYPE check ONLY sReg a for load use
+  		    	if (tr_entry->sReg_a == loadIntoReg) {
+  		        	numNop = 1;
+  		      }
+  		      break;
+  	    }
+      }
+      // check for control hazard
+      else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE || prefetch[0]->type == ti_JRTYPE)
       {
-        int taken = 0;
-        int prediction = 0;
-
-        // determine if branch was taken
-        if (tr_entry->PC == prefetch[0]->Addr)
-          taken = 1;
-
-        // determine hash key for target address
-        int hashKey = prefetch[0]->Addr & 1008;
-        hashKey = hashKey / 16;
-
-        // check if target address is in hash table
-        item = search(hashKey);
-
-        // if target in hash table, prediction = value in table, else = not taken
-        if (item != NULL)
-          prediction = item->data;
-
-        // if prediction isn't what actually happened, add a no op
-        if (prediction != taken)
+        // if prediction_method == 0, add a no op if the brach was taken
+        if (prediction_method == 0 && tr_entry->PC == prefetch[0]->Addr)
           numNop = 1;
+        else if (prediction_method == 1)
+        {
+          int taken = 0;
+          int prediction = 0;
 
-        // add latest decision (taken/not) to hash table
-        insert(hashKey, taken);
+          // determine if branch was taken
+          if (tr_entry->PC == prefetch[0]->Addr)
+            taken = 1;
+
+          // determine hash key for target address
+          int hashKey = prefetch[0]->Addr & 1008;
+          hashKey = hashKey / 16;
+
+          // check if target address is in hash table
+          item = search(hashKey);
+
+          // if target in hash table, prediction = value in table, else = not taken
+          if (item != NULL)
+            prediction = item->data;
+
+          // if prediction isn't what actually happened, add a no op
+          if (prediction != taken)
+            numNop = 1;
+
+          // add latest decision (taken/not) to hash table
+          insert(hashKey, taken);
+        }
       }
     }
    
