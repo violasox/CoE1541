@@ -93,7 +93,7 @@ int main(int argc, char **argv)
 	    }
     }
     // check for control hazard
-    else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE)
+    else if (prefetch[0]->type == ti_BRANCH || prefetch[0]->type == ti_JTYPE || prefetch[0]->type == ti_JRTYPE)
     {
       if (prediction_method == 0 && tr_entry->PC == prefetch[0]->Addr)
       {
