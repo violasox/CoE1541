@@ -26,7 +26,7 @@ int main(int argc, char **argv)
   int trace_view_on = 0;
   int flush_counter = 4; //5 stage pipeline, so we have to move 4 instructions once trace is done
   int leftover = 0;
-  
+  int lastInstruction = 0;
   unsigned int cycle_number = 0;
 
   if (argc == 1) {
@@ -52,9 +52,14 @@ int main(int argc, char **argv)
   while(1) {
     if (leftover) 
       tr_entry1 = tr_entry2;
-    else
+    else {
       size = trace_get_item(&tr_entry1); /* put the instruction into a buffer */
+    }
     size = trace_get_item(&tr_entry2);
+    // Need another cycle to flush if the last
+    if (!size && !lastInstruction) {
+      flush_counter++;
+    }
    
     int type1 = checkInstructionType(tr_entry1->type);
     int type2 = checkInstructionType(tr_entry2->type);
@@ -113,6 +118,7 @@ int main(int argc, char **argv)
 
       if(!size) {    /* if no more instructions in trace, reduce flush_counter */
         flush_counter--;   
+        lastInstruction = 1;
       }
       else {
         memcpy(&IF1, &packing[0], sizeof(IF1));
@@ -137,37 +143,37 @@ int main(int argc, char **argv)
 void printInstruction(struct instruction WB, unsigned int cycle_number, int pipeline) {
   switch(WB.type) {
     case ti_NOP:
-      printf("[cycle %d, pipeline %d] NOP:\n",cycle_number, pipeline) ;
+      printf("[cycle %d] NOP:\n",cycle_number) ;
       break;
     case ti_RTYPE: /* registers are translated for printing by subtracting offset  */
-      printf("[cycle %d, pipeline %d] RTYPE:",cycle_number, pipeline) ;
+      printf("[cycle %d] RTYPE:",cycle_number) ;
       printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(dReg: %d) \n", WB.PC, WB.sReg_a, WB.sReg_b, WB.dReg);
       break;
     case ti_ITYPE:
-      printf("[cycle %d, pipeline %d] ITYPE:",cycle_number, pipeline) ;
+      printf("[cycle %d] ITYPE:",cycle_number) ;
       printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
       break;
     case ti_LOAD:
-      printf("[cycle %d, pipeline %d] LOAD:",cycle_number, pipeline) ;      
+      printf("[cycle %d] LOAD:",cycle_number) ;      
       printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
       break;
     case ti_STORE:
-      printf("[cycle %d, pipeline %d] STORE:",cycle_number, pipeline) ;      
+      printf("[cycle %d] STORE:",cycle_number) ;      
       printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
       break;
     case ti_BRANCH:
-      printf("[cycle %d, pipeline %d] BRANCH:",cycle_number, pipeline) ;
+      printf("[cycle %d] BRANCH:",cycle_number) ;
       printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
       break;
     case ti_JTYPE:
-      printf("[cycle %d, pipeline %d] JTYPE:",cycle_number, pipeline) ;
+      printf("[cycle %d] JTYPE:",cycle_number) ;
       printf(" (PC: %d)(addr: %d)\n", WB.PC,WB.Addr);
       break;
     case ti_SPECIAL:
-      printf("[cycle %d, pipeline %d] SPECIAL:\n",cycle_number, pipeline) ;      	
+      printf("[cycle %d] SPECIAL:\n",cycle_number) ;      	
       break;
     case ti_JRTYPE:
-      printf("[cycle %d, pipeline %d] JRTYPE:",cycle_number, pipeline) ;
+      printf("[cycle %d] JRTYPE:",cycle_number) ;
       printf(" (PC: %d) (sReg_a: %d)(addr: %d)\n", WB.PC, WB.dReg, WB.Addr);
       break;
   }
