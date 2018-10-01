@@ -1,7 +1,7 @@
 /**************************************************************/
-/* CS/COE 1541				 			
+/* CS/COE 1541
    compile with gcc -o pipeline five_stage.c
-   and execute using							
+   and execute using
    ./pipeline  /afs/cs.pitt.edu/courses/1541/short_traces/sample.tr	0 1
 ***************************************************************/
 
@@ -10,7 +10,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <arpa/inet.h>
-#include "CPU.h" 
+#include "CPU.h"
 #include "hash_table.h"
 
 int main(int argc, char **argv)
@@ -24,11 +24,11 @@ int main(int argc, char **argv)
   char *trace_file_name;
   int trace_view_on = 0;
   int prediction_method = 0;
-  int flush_counter = 4; //5 stage pipeline, so we have to move 4 instructions once trace is done
+  int flush_counter = 6; //5 stage pipeline, so we have to move 4 instructions once trace is done
 
   // array of 2 instructions
   struct instruction *prefetch[2];
-  
+
   unsigned int cycle_number = 0;
   unsigned int numNop = 0;
   int prefetch_ready = 0;
@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "\n(switch) to turn on or off individual item view.\n\n");
     exit(0);
   }
-    
+
   trace_file_name = argv[1];
   if (argc >= 3) prediction_method = atoi(argv[2]) ;
   if (argc == 4) trace_view_on = atoi(argv[3]) ;
@@ -55,8 +55,8 @@ int main(int argc, char **argv)
   trace_init();
 
   // initial instruction fetch for prefetch queue
-  trace_get_item(&tr_entry); /* put the instruction into a buffer */
-  
+  size = trace_get_item(&tr_entry); /* put the instruction into a buffer */
+
   while(1) {
 
     // Only load a new instruction from the trace if we haven't inserted a no-op
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
     if (size)
     {
       // Check for a data hazard
-      if (prefetch[0]->type == ti_LOAD) 
+      if (prefetch[0]->type == ti_LOAD)
       {
         // get the register that the data will be loaded into
         uint8_t loadIntoReg = prefetch[0]->dReg;
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
         }
       }
     }
-   
+
     if (!size && flush_counter==0) {       /* no more instructions (instructions) to simulate */
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
       break;
@@ -151,13 +151,13 @@ int main(int argc, char **argv)
       ID = IF;
 
       if(!size) {    /* if no more instructions in trace, reduce flush_counter */
-        flush_counter--;   
+        flush_counter--;
       }
-      else {   /* copy the later queue entry into IF stage */
+      // else {   /* copy the later queue entry into IF stage */
       	memcpy(&IF, prefetch[1], sizeof(IF));
-      
+
       //printf("==============================================================================\n");
-    	}  
+    	// }
     }
 
     // always shift the queue by 1
@@ -177,11 +177,11 @@ int main(int argc, char **argv)
           printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
           break;
         case ti_LOAD:
-          printf("[cycle %d] LOAD:",cycle_number) ;      
+          printf("[cycle %d] LOAD:",cycle_number) ;
           printf(" (PC: %d)(sReg_a: %d)(dReg: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.dReg, WB.Addr);
           break;
         case ti_STORE:
-          printf("[cycle %d] STORE:",cycle_number) ;      
+          printf("[cycle %d] STORE:",cycle_number) ;
           printf(" (PC: %d)(sReg_a: %d)(sReg_b: %d)(addr: %d)\n", WB.PC, WB.sReg_a, WB.sReg_b, WB.Addr);
           break;
         case ti_BRANCH:
@@ -193,7 +193,7 @@ int main(int argc, char **argv)
           printf(" (PC: %d)(addr: %d)\n", WB.PC,WB.Addr);
           break;
         case ti_SPECIAL:
-          printf("[cycle %d] SPECIAL:\n",cycle_number) ;      	
+          printf("[cycle %d] SPECIAL:\n",cycle_number) ;
           break;
         case ti_JRTYPE:
           printf("[cycle %d] JRTYPE:",cycle_number) ;
@@ -207,5 +207,3 @@ int main(int argc, char **argv)
 
   exit(0);
 }
-
-
