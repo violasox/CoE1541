@@ -13,18 +13,24 @@
 #include "CPU.h"
 #include "superscalar.h"
 
+struct instruction *tr_entry;
+size_t size;
+// Create a no-op instruction to be inserted when necessary
+struct instruction nopInstruction = {ti_NOP, 0, 0, 0, 0, 0};
+struct instruction* nopPointer = &nopInstruction;
+
 int main(int argc, char **argv)
 {
-  struct instruction *tr_entry;
+  
   struct instruction IF1, ID1, EX1, MEM1, WB1;
   struct instruction IF2, ID2, EX2, MEM2, WB2;
-  // Create a no-op instruction to be inserted when necessary
-  struct instruction nop = {ti_NOP, 0, 0, 0, 0, 0};
-  struct instruction* nopPointer = &nop;
-  size_t size;
+  
+  
   char *trace_file_name;
   int trace_view_on = 0;
-  int flush_counter = 6; //5 stage pipeline, so we have to move 4 instructions once trace is done
+  int flush_counter = 5; //5 stage pipeline, so we have to move 4 instructions once trace is done
+
+  int lastInstruction = 0;
 
   struct instruction* packing[2];
 
@@ -56,16 +62,15 @@ int main(int argc, char **argv)
   trace_init();
 
   // initial instruction fetch for prefetch queue
-  size = trace_get_item(&tr_entry); /* put the instruction into a buffer */
+  safe_tr_get_item(); /* put the instruction into a buffer */
   prefetch[1] = tr_entry;
-  size = trace_get_item(&tr_entry);
+  safe_tr_get_item();
   prefetch[0] = tr_entry;
   // Boolean to keep track of whether the current item in tr_entry is in the prefetch queue 
   int traceCurrent = 0;
 
   while(1) {
     // Try to pack the next two instructions in the prefetch queue into a superinstruction
-    // TODO: check for second instruction dependent on first (data hazard)
     int type1 = checkInstructionType(prefetch[1]->type);
     int type2 = checkInstructionType(prefetch[0]->type);
     // If first instruction is a branch, can't put both instructions in
@@ -80,7 +85,7 @@ int main(int argc, char **argv)
     //TODO two no ops may break type check
 
     // If the two instructions need the same pipeline or the second has a data dependency on the first, pack one instruction and a nop
-    if ((type1 == type2) || (prefetch[1]->type == ti_LOAD && checkDataDependency(prefetch[1]->dReg, prefetch[0]))) {
+    if ((type1 == type2 && type1 != 0) || (prefetch[1]->type == ti_LOAD && checkDataDependency(prefetch[1]->dReg, prefetch[0]))) {
       if (type1 == 1) {
         packing[0] = prefetch[1];
         packing[1] = nopPointer;
@@ -119,7 +124,7 @@ int main(int argc, char **argv)
       else {
         prefetch[1] = prefetch[0];
         if (!traceCurrent)
-          size = trace_get_item(&tr_entry);
+          safe_tr_get_item();
         hazard = checkForHazards(packing, tr_entry, 0);
         if (hazard) {
           prefetch[0] = nopPointer;
@@ -134,7 +139,7 @@ int main(int argc, char **argv)
     // No instructions in prefetch
     else {
       if (!traceCurrent)
-        size = trace_get_item(&tr_entry);
+        safe_tr_get_item();
       int hazard = checkForHazards(packing, tr_entry, 1);
       if (hazard) {
         prefetch[0] = nopPointer;
@@ -143,8 +148,9 @@ int main(int argc, char **argv)
       }
       else {
         prefetch[1] = tr_entry;
+        traceCurrent = 0;
         if (!traceCurrent)
-          size = trace_get_item(&tr_entry);
+          safe_tr_get_item();
         hazard = checkForHazards(packing, tr_entry, 0);
         if (hazard) {
           prefetch[0] = nopPointer;
@@ -156,7 +162,9 @@ int main(int argc, char **argv)
         }
       }
     }
-        
+
+    if (!size && !traceCurrent && !checkInstructionType(prefetch[0]->type) && !checkInstructionType(prefetch[1]->type))
+        lastInstruction = 1;
 
     if (!size && flush_counter==0) {       /* no more instructions (instructions) to simulate */
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
@@ -176,7 +184,7 @@ int main(int argc, char **argv)
       EX2 = ID2;
       ID2 = IF2;
 
-      if(!size) {    /* if no more instructions in trace, reduce flush_counter */
+      if(!size && lastInstruction) {    /* if no more instructions in trace, reduce flush_counter */
         flush_counter--;
       }
       // else {   /* copy the later queue entry into IF1 stage */
@@ -196,6 +204,17 @@ int main(int argc, char **argv)
   trace_uninit();
 
   exit(0);
+}
+
+/*
+ * calls trace_get_item with tr_entry, setting size to the return value
+ * sets tr_entry to the nopPoint if size == 0
+ */
+void safe_tr_get_item()
+{
+  size = trace_get_item(&tr_entry);
+  if(!size)
+    tr_entry = nopPointer;
 }
 
 
@@ -295,7 +314,6 @@ int checkForHazards(struct instruction** packing, struct instruction* instruct, 
     if (hazard)
       return hazard;
   }
-  // check for control hazard (only need to check 1st pipeline for R-type TODO: check this)
   if (checkControl && (packing[0]->type == ti_BRANCH || packing[0]->type == ti_JTYPE || packing[0]->type == ti_JRTYPE))
   {
     // add a no op if the branch was taken
