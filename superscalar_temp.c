@@ -77,6 +77,8 @@ int main(int argc, char **argv)
     if (type2 == 3) 
         type2 = 1;
 
+    //TODO two no ops may break type check
+
     // If the two instructions need the same pipeline or the second has a data dependency on the first, pack one instruction and a nop
     if ((type1 == type2) || (prefetch[1]->type == ti_LOAD && checkDataDependency(prefetch[1]->dReg, prefetch[0]))) {
       if (type1 == 1) {
@@ -124,7 +126,7 @@ int main(int argc, char **argv)
           traceCurrent = 1;
         }
         else {
-          prefetch[1] = tr_entry;
+          prefetch[0] = tr_entry;
           traceCurrent = 0;
         }
       }
