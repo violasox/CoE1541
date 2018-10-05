@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     //TODO two no ops may break type check
 
     // If the two instructions need the same pipeline or the second has a data dependency on the first, pack one instruction and a nop
-    if ((type1 == type2) || (prefetch[1]->type == ti_LOAD && checkDataDependency(prefetch[1]->dReg, prefetch[0]))) {
+    if ((type1 == type2 && type2 != 0) || (prefetch[1]->type == ti_LOAD && checkDataDependency(prefetch[1]->dReg, prefetch[0]))) {
       if (type1 == 1) {
         packing[0] = prefetch[1];
         packing[1] = nopPointer;
@@ -248,6 +248,9 @@ int checkInstructionType(enum opcode type) {
       break;
     case ti_BRANCH:
       return 3;
+      break;
+    case ti_NOP:
+      return 0;
       break;
     default:
       return 1; 
