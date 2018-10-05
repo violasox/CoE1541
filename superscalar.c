@@ -1,42 +1,54 @@
 /**************************************************************/
-/* CS/COE 1541				 			
-   compile with gcc -o pipeline five_stage.c			
-   and execute using							
-   ./pipeline  /afs/cs.pitt.edu/courses/1541/short_traces/sample.tr	0  
+/* CS/COE 1541
+   compile with gcc -o pipeline five_stage.c
+   and execute using
+   ./pipeline  /afs/cs.pitt.edu/courses/1541/short_traces/sample.tr 1
 ***************************************************************/
 
 #include <stdio.h>
-#include <inttypes.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
 #include <arpa/inet.h>
-#include "CPU.h" 
+#include "CPU.h"
 #include "superscalar.h"
+
+struct instruction *tr_entry;
+size_t size;
+// Create a no-op instruction to be inserted when necessary
+struct instruction nopInstruction = {ti_NOP, 0, 0, 0, 0, 0};
+struct instruction* nopPointer = &nopInstruction;
 
 int main(int argc, char **argv)
 {
-  struct instruction* tr_entry1;
-  struct instruction* tr_entry2;
+  
   struct instruction IF1, ID1, EX1, MEM1, WB1;
   struct instruction IF2, ID2, EX2, MEM2, WB2;
-  struct instruction packing[2];
-  struct instruction nop = {ti_NOP, 0, 0, 0, 0, 0};
-  size_t size;
+  
+  
   char *trace_file_name;
   int trace_view_on = 0;
-  int flush_counter = 4; //5 stage pipeline, so we have to move 4 instructions once trace is done
-  int leftover = 0;
+  int flush_counter = 5; //5 stage pipeline, so we have to move 4 instructions once trace is done
+
   int lastInstruction = 0;
+
+  struct instruction* packing[2];
+
+  // array of 2 instructions
+  struct instruction *prefetch[2];
+
   unsigned int cycle_number = 0;
+  unsigned int numNop = 0;
+  int prefetch_ready = 0;
 
   if (argc == 1) {
     fprintf(stdout, "\nUSAGE: tv <trace_file> <switch - any character>\n");
     fprintf(stdout, "\n(switch) to turn on or off individual item view.\n\n");
     exit(0);
   }
-    
+
   trace_file_name = argv[1];
-  if (argc == 3) trace_view_on = atoi(argv[2]) ;
+  if (argc == 4) trace_view_on = atoi(argv[3]) ;
 
   fprintf(stdout, "\n ** opening file %s\n", trace_file_name);
 
@@ -49,20 +61,18 @@ int main(int argc, char **argv)
 
   trace_init();
 
+  // initial instruction fetch for prefetch queue
+  safe_tr_get_item(); /* put the instruction into a buffer */
+  prefetch[1] = tr_entry;
+  safe_tr_get_item();
+  prefetch[0] = tr_entry;
+  // Boolean to keep track of whether the current item in tr_entry is in the prefetch queue 
+  int traceCurrent = 0;
+
   while(1) {
-    if (leftover) 
-      tr_entry1 = tr_entry2;
-    else {
-      size = trace_get_item(&tr_entry1); /* put the instruction into a buffer */
-    }
-    size = trace_get_item(&tr_entry2);
-    // Need another cycle to flush if the last
-    if (!size && !lastInstruction) {
-      flush_counter++;
-    }
-   
-    int type1 = checkInstructionType(tr_entry1->type);
-    int type2 = checkInstructionType(tr_entry2->type);
+    // Try to pack the next two instructions in the prefetch queue into a superinstruction
+    int type1 = checkInstructionType(prefetch[1]->type);
+    int type2 = checkInstructionType(prefetch[0]->type);
     // If first instruction is a branch, can't put both instructions in
     if (type1 == 3) {
       type1 = 1;
@@ -72,37 +82,95 @@ int main(int argc, char **argv)
     if (type2 == 3) 
         type2 = 1;
 
-    // Can fully pack the superinstruction
-    if (type1 != type2) {
-      leftover = 0;
+    //TODO two no ops may break type check
+
+    // If the two instructions need the same pipeline or the second has a data dependency on the first, pack one instruction and a nop
+    if ((type1 == type2 && type1 != 0) || (prefetch[1]->type == ti_LOAD && checkDataDependency(prefetch[1]->dReg, prefetch[0]))) {
       if (type1 == 1) {
-        memcpy(&packing[0], tr_entry1, sizeof(IF1));
-        memcpy(&packing[1], tr_entry2, sizeof(IF1));
+        packing[0] = prefetch[1];
+        packing[1] = nopPointer;
       }
       else {
-        memcpy(&packing[0], tr_entry2, sizeof(IF1));
-        memcpy(&packing[1], tr_entry1, sizeof(IF1));
+        packing[0] = nopPointer;
+        packing[1] = prefetch[1];
       }
+      prefetch[1] = NULL;
+    }
+    // Can fully pack the superinstruction
+    else {
+      if (type1 == 1 || (type1 == 0 && type2 == 2)) {
+        packing[0] = prefetch[1];
+        packing[1] = prefetch[0];
+      }
+      else {
+        packing[0] = prefetch[0];
+        packing[1] = prefetch[1];
+      }
+      prefetch[0] = NULL;
+      prefetch[1] = NULL;
     }
     // Superinstruction gets one real instruction and one no-op
-    else {
-      leftover = 1;
-      if (type1 == 1) {
-        memcpy(&packing[0], tr_entry1, sizeof(IF1));
-        memcpy(&packing[1], &nop, sizeof(IF1));
+
+    // Refill the prefetch queue
+    // 1 instruction already in prefetch
+    if (prefetch[0] != NULL) {
+      int hazard = checkForHazards(packing, prefetch[0], 1);
+      if (hazard) {
+        prefetch[0] = nopPointer;
+        prefetch[1] = nopPointer;
+        // Booted the instruction out of the prefetch queue, so tr_entry has a new value
+        traceCurrent = 1;
       }
       else {
-        memcpy(&packing[0], &nop, sizeof(IF1));
-        memcpy(&packing[1], tr_entry1, sizeof(IF1));
+        prefetch[1] = prefetch[0];
+        if (!traceCurrent)
+          safe_tr_get_item();
+        hazard = checkForHazards(packing, tr_entry, 0);
+        if (hazard) {
+          prefetch[0] = nopPointer;
+          traceCurrent = 1;
+        }
+        else {
+          prefetch[0] = tr_entry;
+          traceCurrent = 0;
+        }
       }
     }
+    // No instructions in prefetch
+    else {
+      if (!traceCurrent)
+        safe_tr_get_item();
+      int hazard = checkForHazards(packing, tr_entry, 1);
+      if (hazard) {
+        prefetch[0] = nopPointer;
+        prefetch[1] = nopPointer;
+        traceCurrent = 1;
+      }
+      else {
+        prefetch[1] = tr_entry;
+        traceCurrent = 0;
+        if (!traceCurrent)
+          safe_tr_get_item();
+        hazard = checkForHazards(packing, tr_entry, 0);
+        if (hazard) {
+          prefetch[0] = nopPointer;
+          traceCurrent = 1;
+        }
+        else {
+          prefetch[0] = tr_entry;
+          traceCurrent = 0;
+        }
+      }
+    }
+
+    if (!size && !traceCurrent && !checkInstructionType(prefetch[0]->type) && !checkInstructionType(prefetch[1]->type))
+        lastInstruction = 1;
 
     if (!size && flush_counter==0) {       /* no more instructions (instructions) to simulate */
       printf("+ Simulation terminates at cycle : %u\n", cycle_number);
       break;
     }
-
-    else{              /* move the pipeline forward */
+    else {            /* move the pipeline forward */
       cycle_number++;
 
       /* move instructions one stage ahead */
@@ -116,20 +184,18 @@ int main(int argc, char **argv)
       EX2 = ID2;
       ID2 = IF2;
 
-      if(!size) {    /* if no more instructions in trace, reduce flush_counter */
-        flush_counter--;   
-        lastInstruction = 1;
+      if(!size && lastInstruction) {    /* if no more instructions in trace, reduce flush_counter */
+        flush_counter--;
       }
-      else {
-        memcpy(&IF1, &packing[0], sizeof(IF1));
-        memcpy(&IF2, &packing[1], sizeof(IF2));
-      }
+      // else {   /* copy the later queue entry into IF1 stage */
+        memcpy(&IF1, packing[0], sizeof(IF1));
+        memcpy(&IF2, packing[1],  sizeof(IF2));
 
       //printf("==============================================================================\n");
-    }  
+      // }
+    }
 
-
-    if (trace_view_on && cycle_number>=5) {/* print the executed instruction if trace_view_on=1 */
+    if (trace_view_on && cycle_number>=5) {/* print the executed instructions if trace_view_on=1 */
       printInstruction(WB1, cycle_number, 1);
       printInstruction(WB2, cycle_number, 2);
     }
@@ -139,6 +205,18 @@ int main(int argc, char **argv)
 
   exit(0);
 }
+
+/*
+ * calls trace_get_item with tr_entry, setting size to the return value
+ * sets tr_entry to the nopPoint if size == 0
+ */
+void safe_tr_get_item()
+{
+  size = trace_get_item(&tr_entry);
+  if(!size)
+    tr_entry = nopPointer;
+}
+
 
 void printInstruction(struct instruction WB, unsigned int cycle_number, int pipeline) {
   switch(WB.type) {
@@ -170,7 +248,7 @@ void printInstruction(struct instruction WB, unsigned int cycle_number, int pipe
       printf(" (PC: %d)(addr: %d)\n", WB.PC,WB.Addr);
       break;
     case ti_SPECIAL:
-      printf("[cycle %d] SPECIAL:\n",cycle_number) ;      	
+      printf("[cycle %d] SPECIAL:\n",cycle_number) ;        
       break;
     case ti_JRTYPE:
       printf("[cycle %d] JRTYPE:",cycle_number) ;
@@ -190,6 +268,9 @@ int checkInstructionType(enum opcode type) {
     case ti_BRANCH:
       return 3;
       break;
+    case ti_NOP:
+      return 0;
+      break;
     default:
       return 1; 
       break;
@@ -198,4 +279,47 @@ int checkInstructionType(enum opcode type) {
   return 1;
 }
 
+int checkDataDependency(uint8_t loadIntoReg, struct instruction* instruct) {
+  int numNop = 0;
+  switch (instruct->type)
+  {
+    case ti_RTYPE :
+    case ti_STORE :
+    case ti_BRANCH :
+      // if the next instruction is RTYPE/STORE/BRANCH check sReg a and b for load use
+      if (instruct->sReg_a == loadIntoReg || instruct->sReg_b == loadIntoReg) {
+            numNop = 1;
+      }
+      break;
+    case ti_ITYPE :
+    case ti_LOAD :
+    case ti_JRTYPE :
+    // if the next instruction is ITYPE/LOAD/JRTYPE check ONLY sReg a for load use
+      if (instruct->sReg_a == loadIntoReg) {
+        numNop = 1;
+      }
+      break;
+  }
+  return numNop;
+}
 
+int checkForHazards(struct instruction** packing, struct instruction* instruct, int checkControl) {
+  // Check for a data hazard (only need to check 2nd pipeline for loads)
+  int hazard = 0;
+  if (packing[1]->type == ti_LOAD)
+  {
+    // get the register that the data will be loaded into
+    uint8_t loadIntoReg = packing[1]->dReg;
+    hazard = checkDataDependency(loadIntoReg, instruct);
+    if (hazard)
+      return hazard;
+  }
+  if (checkControl && (packing[0]->type == ti_BRANCH || packing[0]->type == ti_JTYPE || packing[0]->type == ti_JRTYPE))
+  {
+    // add a no op if the branch was taken
+    if (instruct->PC == packing[0]->Addr)
+      hazard = 1;
+  }
+
+  return hazard;
+}
